@@ -7,7 +7,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>
+      <body className="w-screen h-screen m-0 p-0">
         {children}
       </body>
     </html>
