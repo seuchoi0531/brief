@@ -1,6 +1,8 @@
-"use client"
+"use client";
 
-import styles from "./slide.module.css";
+import ClosingSlide from "./ClosingSlide";
+import CommonSlide from "./CommonSlide";
+import OpeningSlide from "./OpeningSlide";
 
 export interface SlideData {
   type: number;
@@ -8,7 +10,7 @@ export interface SlideData {
   cell: number;
   kind?: number;
 }
-interface SlideProp {
+export interface SlideProp {
   data: SlideData;
   handle: React.Dispatch<React.SetStateAction<boolean[]>>;
   children?: React.ReactNode;
@@ -18,14 +20,13 @@ export default function Slide({ data, handle, children }: SlideProp) {
   console.log(data.title);
   return (
     <>
-      {
-        (Number(data.cell) < 5) && (
-          <div className={`${styles.slide} ${data.type === 0 ? `${styles['opening-slide']}` : (data.type === 2 ? "closing-slide" : "")}`}>
-            <h1 className={styles.title}>{data.title}</h1>
-            <div className={`${data.type !== 2 ? "hidden" : `slide-type-${Number(data.cell)}${Number(data.kind)}`}`}>{children}</div>
-          </div>
-        )
-      }
+      {data.type === 0 && <OpeningSlide data={data} handle={handle} />}
+      {data.type === 1 && (
+        <CommonSlide data={data} handle={handle}>
+          {children}
+        </CommonSlide>
+      )}
+      {data.type === 2 && <ClosingSlide data={data} handle={handle} />}
     </>
-  )
+  );
 }
