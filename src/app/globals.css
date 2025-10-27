@@ -1,13 +1,1 @@
 @import "tailwindcss";
-
-.slide {
-  @apply w-full h-full;
-}
-
-.opening-slide {
-  @apply flex justify-center items-center;
-}
-
-.title {
-  @apply text-3xl;
-}

@@ -1,9 +1,14 @@
 "use client";
-import PPT from "@/components/PPT";
-export default function Home() {
-  return (
-    <main className="w-full h-full p-10 relative">
-      <PPT />
-    </main>
-  );
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/opening");
+  }, [router]);
+
+  return null;
 }
