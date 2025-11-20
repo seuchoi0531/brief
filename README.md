@@ -1,36 +1,185 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TailwindCSS에서 동적 클래스 사용하기
 
-## Getting Started
+Tailwind CSS는 유틸리티 기반 스타일링을 매우 빠르고 편하게 만들어주지만, **동적으로 클래스 이름을 만드는 것**은 공식적으로 금지하고 있다.
+왜 이런 제한이 있는지, 그리고 실제로 이를 우회하거나 해결할 수 있는 방법이 있는지 탐구하면서 Tailwind CSS의 내부 동작을 분석하게 되었다. 이 문서는 그 과정과 이해한 내용을 정리한 것이다.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 1. Tailwind CSS에서 동적 클래스가 왜 문제인가?
+
+### 1.1 버튼 스타일링으로 살펴본 Tailwind 사용 흐름
+
+기본 버튼 하나를 만드는 과정에서 Tailwind의 편리함과 동시에 class 문자열이 점점 길어지는 문제를 쉽게 체감할 수 있다.
+
+1. **기본 버튼 생성**
+   Tailwind의 기본 리셋 스타일 덕분에 버튼은 테두리와 배경이 없어서 처음엔 버튼처럼 보이지 않는다.
+
+2. **기본 스타일 추가**
+   `border`, `font-bold`, `text-lg`, `py-4`, `px-8` 등 버튼으로 보이기 위한 기본 스타일을 추가한다.
+
+3. **시각적 요소 강화**
+   그라디언트, `rounded-xl`, `text-white`, 커스텀 shadow 등을 넣는다.
+   Tailwind의 대괄호 문법을 활용해 쉐도우 값을 직접 지정할 수도 있다.
+
+4. **상태별 스타일 추가 (hover, focus, active)**
+
+   - hover 시 scale 적용
+   - focus 시 outline 제거 및 애니메이션
+   - active 시 살짝 눌리는 효과 등
+     상태가 늘어날수록 class 문자열은 기하급수적으로 길어진다.
+
+결국 하나의 버튼만으로도 **클래스 문자열이 600자까지** 늘어나며, 가독성이나 유지보수 측면에서 불편함이 생긴다.
+
+---
+
+### 1.2 클래스 분리와 객체 기반 관리 시도
+
+이 문제를 해결하기 위해 다음과 같이 구조화해 보았다.
+
+1. **상태별로 클래스 분리**
+
+   ```ts
+   styles.base;
+   styles.hover;
+   styles.focus;
+   styles.active;
+   ```
+
+   이런 식으로 분리하면 구조적 관리가 가능해진다.
+
+2. **하지만 그대로 사용할 수 없음**
+   예를 들어 `hover:` 같은 접두사가 빠지면 Tailwind가 클래스라고 인식하지 않는다.
+   “`scale-105`”는 있지만 “`hover:scale-105`”는 코드에 존재하지 않기 때문이다.
+
+3. **접두사를 자동으로 붙여주는 `appendPrefix` 함수 구현**
+
+   ```ts
+   appendPrefix("hover:", "scale-105 shadow-lg");
+   // → "hover:scale-105 hover:shadow-lg"
+   ```
+
+4. **겉보기엔 동작하는 것처럼 보이지만…**
+   DevTools에서는 hover 클래스들이 잘 들어간 것처럼 보이지만, 사실 이는
+
+   - 해당 클래스들이 **이미 프로젝트 어딘가에서 등장했기 때문**
+   - 혹은 Tailwind가 **다른 이유로 해당 유틸리티를 이미 생성했기 때문**
+
+   그래서 실제로는 “동적 클래스가 생성된 것”이 아니다.
+
+---
+
+### 1.3 Tailwind가 동적 클래스를 허용하지 않는 진짜 이유
+
+Tailwind 공식 문서에서는 다음과 같은 패턴을 금지한다.
+
+```js
+text-${error ? 'red' : 'green'}-600   // ❌ 금지
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+왜냐하면 Tailwind는 **완성된 문자열**만 파싱해서 CSS를 생성하기 때문이다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+정확한 이유는 내부 동작 방식에 있다.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+#### Tailwind의 동작 방식 (요약)
 
-## Learn More
+1. **프로젝트 파일을 통 문자열로 읽는다.**
+2. 문자열 중에서 “클래스일 가능성이 있는 토큰”을 추출한다 (토큰화).
+3. Tailwind 내부 사전에 존재하는 클래스인지 비교한다.
+4. 일치하는 토큰만 유틸리티 클래스로 CSS에 생성한다.
+5. 생성된 유틸리티들은 `globals.css` → `.next` 내부로 출력된다.
 
-To learn more about Next.js, take a look at the following resources:
+이 과정에서 **빼곡하게 완성된 문자열로 적힌 클래스만** CSS로 만들어진다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+따라서 동적으로 문자열을 조합하면 절대 Tailwind가 이를 찾지 못한다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 2. 실제로 어떻게 CSS가 생성되는가?
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Tailwind는 PostCSS 환경에서 플러그인으로 동작한다.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. `@tailwind base;`
+2. `@tailwind components;`
+3. `@tailwind utilities;`
+
+이 지시어가 있는 CSS 파일을 기반으로
+프로젝트 전체 파일을 분석해 **필요한 클래스만 추출**하고
+`.next/static/css` 같은 위치에 최종 CSS 파일을 생성한다.
+
+또한 레이어 구조는 다음과 같다:
+
+- **Base**: modern-normalize 기반 리셋
+- **Components**: 컴포넌트 레이어
+- **Utilities**: 우리가 실제로 사용하는 Tailwind 유틸리티 클래스
+- **Theme**: Tailwind가 내부적으로 사용하는 변수들 (`spacing`, `fontSize` 등)
+
+이 구조를 이해하면 동적 클래스가 왜 불가능한지 더 분명해진다.
+
+---
+
+## 3. 동적 클래스를 가능하게 만들기 위한 개인적인 도전
+
+Tailwind가 동적 클래스를 읽도록 하려면 **미리 클래스들을 만들어 파일에 넣어두면 된다**는 아이디어가 떠올랐다.
+
+이를 위해 다음을 시도했다.
+
+### 3.1 Babel 플러그인 개발
+
+- AST를 학습하고
+- Babel 플러그인을 직접 구현하여
+- 프로젝트 파일을 분석해 자동으로 필요한 Tailwind 클래스를 생성하도록 시도했다.
+
+로컬 테스트에서는
+`test.txt` 파일에 필요한 클래스를 생성하고
+Tailwind가 이를 인식해 `globals.css`에 반영하는 데 성공했다.
+
+### 3.2 문제 발생
+
+Next.js는 더 이상 Webpack + Babel 환경을 기본으로 사용하지 않는다.
+
+- Next 14 기준
+
+  - 번들러: **Turbopack**
+  - 트랜스파일러: **SWC(Rust 기반)**
+
+즉, Babel 플러그인은 실제 앱에서는 동작하지 않는다.
+
+### 3.3 Rust 학습 시작
+
+SWC 기반으로 비슷한 기능을 만들기 위해 Rust를 공부하기 시작했다.
+이 과정에서 약 일주일 정도를 투자했고, 아직 초기 단계이지만 구현 가능성은 열려 있다.
+
+---
+
+## 4. 객체 기반 클래스 관리의 가치
+
+동적 클래스 문제를 해결하려는 과정은 단순한 기술적 시도뿐 아니라
+객체 지향적 코드 구조화에도 큰 의미가 있다.
+
+- 길고 반복적인 Tailwind 클래스를
+- 상태별 객체로 분리하고
+- prefix를 조합하거나 확장 가능하게 관리하는 접근 방식은
+  재사용성과 유지보수성을 크게 높인다.
+
+이는 단순히 컴포넌트화 수준을 넘어,
+**구조적 사고와 추상화 능력**을 요구하는 부분이기 때문에
+코드의 퀄리티를 확실히 끌어올릴 수 있다.
+
+---
+
+## 5. 앞으로의 계획
+
+- Turbopack + SWC 환경에서도 동작하는 방식으로
+  동적 Tailwind 클래스 생성기를 만들어 NPM 패키지로 배포하는 것이 목표다.
+- 객체 기반 클래스 관리 패턴을 다양한 컴포넌트에 적용해 재사용성을 높여 볼 예정이다.
+- 현재 만든 Babel 버전의 플러그인은 아직 테스트 단계지만, 완성도를 높이면 오픈 소스로 공개할 예정이다.
+
+---
+
+필요하다면:
+
+- 더 짧은 버전으로 요약
+- 기술 블로그용 버전
+- 발표용 슬라이드 스크립트
+- 코드 예제 중심 버전
+  등으로 다시 다듬어 줄게!
